@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Django
+media/
+staticfiles/
+*.log
+local_settings.py
+
+# Virtual Environment
+venv/
+.venv/
+ENV/
+env/
+env.bak/
+
+# Environment variables
+*.env
+
+# VS Code
+.vscode/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Redis dump (if any)
+dump.rdb
+
+# Migration backups
+*/migrations/*.pyc
+*/migrations/__pycache__/
+
+# Sensitive files
+secrets.json
+
+# Python cache
+*.egg-info/
+dist/
+build/

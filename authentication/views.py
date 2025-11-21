@@ -1,0 +1,102 @@
+from django.shortcuts import render
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from django.contrib.auth import get_user_model
+from .serializers import SignupSerializer, VerifyOTPSerializer, LoginSerializer
+from .utils import create_and_send_otp
+from django.utils import timezone
+from .models import OTP
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.db import transaction
+
+User = get_user_model()
+
+
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        "refresh": str(refresh),
+        "access": str(refresh.access_token),
+    }
+
+
+class SignupView(APIView):
+    
+    # Create user and send OTP for verification.
+    
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = SignupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        try:
+            otp = create_and_send_otp(user.phone)
+        except RuntimeError as e:
+            user.delete()
+            return Response({"detail": str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        return Response({
+            "detail": "User created. OTP sent for verification.",
+            "user_id": str(user.id),
+            "otp_expires_at": otp.expires_at
+        }, status=status.HTTP_201_CREATED)
+
+
+class ResendOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        phone = request.data.get("phone")
+        if not phone:
+            return Response({"detail": "phone is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not User.objects.filter(phone=phone).exists():
+            return Response({"detail": "phone not registered"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            otp = create_and_send_otp(phone)
+        except RuntimeError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        return Response({"detail": "OTP resent", "otp_expires_at": otp.expires_at})
+
+
+class VerifyOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = VerifyOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        otp_obj = serializer.validated_data["otp_obj"]
+        phone = serializer.validated_data["phone"]
+
+        # mark OTP used and activate user atomically
+        with transaction.atomic():
+            if otp_obj.used:
+                return Response({"detail": "OTP already used."}, status=status.HTTP_400_BAD_REQUEST)
+            otp_obj.used = True
+            otp_obj.save(update_fields=["used"])
+
+            # activate or create user if exists
+            user_qs = User.objects.filter(phone=phone)
+            if not user_qs.exists():
+                return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            user = user_qs.first()
+            if not user.is_active:
+                user.is_active = True
+                user.save(update_fields=["is_active"])
+
+        tokens = get_tokens_for_user(user)
+        return Response({"detail": "OTP verified", "tokens": tokens})
+
+
+class LoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data["user"]
+        tokens = get_tokens_for_user(user)
+        return Response({"detail": "Login successful", "tokens": tokens})
+
+
