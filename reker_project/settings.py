@@ -78,6 +78,7 @@ CACHES = {
 
 INSTALLED_APPS = [
     'authentication',
+    'merchants',
     'django.contrib.admin',
     'rest_framework',
     'rest_framework_simplejwt',
