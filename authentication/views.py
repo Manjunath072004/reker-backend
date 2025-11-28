@@ -10,6 +10,8 @@ from django.utils import timezone
 from .models import OTP
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import transaction
+from rest_framework import permissions
+
 
 User = get_user_model()
 
@@ -100,3 +102,69 @@ class LoginView(APIView):
         return Response({"detail": "Login successful", "tokens": tokens})
 
 
+class CheckPhoneView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        phone = request.data.get("phone", "").strip()
+
+        if not phone:
+            return Response({"detail": "Phone is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        exists = User.objects.filter(phone=phone).exists()
+        print("CHECK_PHONE RECEIVED:", phone)
+        print("PHONE EXISTS:", exists)
+
+        if exists:
+            # generate OTP for login
+            otp = create_and_send_otp(phone)  # this will print OTP in console
+            return Response({
+                "exists": True,
+                "detail": "OTP generated",
+                "otp_expires_at": otp.expires_at
+            })
+
+        return Response({"exists": False, "detail": "Phone not registered"})
+
+
+class CheckEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email", "").strip()
+        print("CHECK_EMAIL RECEIVED:", email)
+
+        users = User.objects.filter(email=email)
+        exists = users.exists()
+
+        phone = ""
+        if exists:
+            phone = users.first().phone
+            otp = create_and_send_otp(phone)  # OTP printed in console
+
+        print("EMAIL EXISTS:", exists)
+        return Response({"exists": exists, "phone": phone})
+    
+
+class ResetPasswordView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        phone = request.data.get("phone")
+        new_password = request.data.get("new_password")
+
+        if not phone or not new_password:
+            return Response({"detail": "phone and new_password required"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(phone=phone)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found"},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # update password
+        user.set_password(new_password)
+        user.save()
+
+        return Response({"detail": "Password updated successfully"})
