@@ -88,3 +88,29 @@ class CouponApplyView(APIView):
             "discount": float(discount),
             "final_amount": float(final_amount)
         })
+    
+
+class CouponVerifyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        code = request.data.get("code", "").strip()
+
+        # 1. Check coupon exists
+        try:
+            coupon = Coupon.objects.get(code__iexact=code)
+        except Coupon.DoesNotExist:
+            return Response({"error": "Invalid coupon"}, status=404)
+
+        # 2. Check coupon is valid (expiry, status, usage)
+        if not coupon.is_valid():
+            return Response({"error": "Coupon expired or invalid"}, status=400)
+
+        # 3. Return coupon details
+        serializer = CouponSerializer(coupon)
+
+        return Response({
+            "message": "Coupon verified",
+            "coupon": serializer.data
+        }, status=200)
+
