@@ -22,11 +22,19 @@ class CouponCreateView(APIView):
         return Response(serializer.errors, status=400)
 
 
+# updated coupon List for perticular User
 class CouponListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        coupons = Coupon.objects.all()
+        user = request.user
+
+        # Filter coupons created by this user only
+        coupons = Coupon.objects.filter(created_by=user)
+
+        if not coupons.exists():
+            return Response({"message": "No coupons available for this user"}, status=200)
+
         serializer = CouponSerializer(coupons, many=True)
         return Response(serializer.data)
 
