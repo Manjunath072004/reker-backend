@@ -168,3 +168,16 @@ class ResetPasswordView(APIView):
         user.save()
 
         return Response({"detail": "Password updated successfully"})
+
+
+class MeView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            "id": str(user.id),
+            "phone": user.phone,
+            "email": user.email,
+            "full_name": user.full_name,
+        })
