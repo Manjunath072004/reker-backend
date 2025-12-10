@@ -71,6 +71,8 @@ class VerifyOTPView(APIView):
         otp_obj = serializer.validated_data["otp_obj"]
         phone = serializer.validated_data["phone"]
 
+        from merchants.models import Merchant, MerchantSettings
+
         # mark OTP used and activate user atomically
         with transaction.atomic():
             if otp_obj.used:
@@ -87,6 +89,35 @@ class VerifyOTPView(APIView):
                 user.is_active = True
                 user.save(update_fields=["is_active"])
 
+        # added merchant
+
+        if not hasattr(user, "merchant"):
+
+                # Generate business name fallback safely
+                if user.full_name:
+                    business_name = user.full_name
+                elif user.email:
+                    business_name = user.email.split("@")[0]  # part before @
+                else:
+                    business_name = "New Business"
+
+                # Create merchant profile
+                merchant = Merchant.objects.create(
+                    user=user,
+                    business_name=business_name,
+                    phone=user.phone,
+                    email=user.email,
+                )
+
+                # Default merchant settings
+                MerchantSettings.objects.create(
+                    merchant=merchant,
+                    auto_settlement=True,
+                    settlement_cycle="T+1",
+                )
+        
+
+
         tokens = get_tokens_for_user(user)
         return Response({"detail": "OTP verified", "tokens": tokens})
 
@@ -98,8 +129,39 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
+
+        # added merchant 
+
+        from merchants.models import Merchant, MerchantSettings
+
+        if not hasattr(user, "merchant"):
+
+            if user.full_name:
+                business_name = user.full_name
+            elif user.email:
+                business_name = user.email.split("@")[0]
+            else:
+                business_name = "New Business"
+
+            merchant = Merchant.objects.create(
+                user=user,
+                business_name=business_name,
+                phone=user.phone,
+                email=user.email,
+            )
+
+            MerchantSettings.objects.create(
+                merchant=merchant,
+                auto_settlement=True,
+                settlement_cycle="T+1",
+            )
+
         tokens = get_tokens_for_user(user)
         return Response({"detail": "Login successful", "tokens": tokens})
+    
+   
+    
+
 
 
 class CheckPhoneView(APIView):
