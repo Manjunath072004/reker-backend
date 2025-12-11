@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'authentication',
     'merchants',
     'coupons',
+    'payments',
     'corsheaders',
     'django.contrib.admin',
     'rest_framework',
