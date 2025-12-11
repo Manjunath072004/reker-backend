@@ -26,5 +26,7 @@ urlpatterns = [
     path("api/coupons/", include("coupons.urls")),
     path('api/', include('merchants.urls')),
     path("api/auth/", include("authentication.urls")),
+    path("api/payments/", include("payments.urls")),
+
     # other app routes...
 ]
