@@ -39,6 +39,16 @@ class VerifyPaymentView(APIView):
         payment.status = status_param
         payment.save()
 
+        #  Always update transaction also
+        if hasattr(payment, "transaction"):
+            transaction = payment.transaction
+
+            if not transaction.gateway_transaction_id:
+                transaction.gateway_transaction_id = "UPI"  # default method
+
+            transaction.status = status_param
+            transaction.save()
+
         return Response({"message": "Payment updated", "status": payment.status})
 
 
