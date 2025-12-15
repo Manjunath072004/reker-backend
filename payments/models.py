@@ -31,6 +31,8 @@ class Payment(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
     transaction_id = models.CharField(max_length=255, blank=True, null=True)
 
+    settlement_created = models.BooleanField(default=False)
+
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(default=timezone.now)
 

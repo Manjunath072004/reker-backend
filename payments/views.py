@@ -9,6 +9,8 @@ from .models import Payment
 from .serializers import CreatePaymentSerializer, PaymentSerializer
 from merchants.models import Merchant
 from django.shortcuts import get_object_or_404
+from settlements.models import Settlement
+
 
 
 class CreatePaymentView(APIView):
@@ -39,6 +41,16 @@ class VerifyPaymentView(APIView):
         payment.status = status_param
         payment.save()
 
+        if status_param == "SUCCESS" and not payment.settlement_created:
+            Settlement.objects.create(
+                merchant=payment.merchant,
+                amount=payment.final_amount,
+                status="PENDING"
+            )
+            payment.settlement_created = True
+            payment.save()
+
+    
         #  Always update transaction also
         if hasattr(payment, "transaction"):
             transaction = payment.transaction
