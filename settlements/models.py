@@ -20,6 +20,8 @@ class Settlement(models.Model):
         related_name="settlements"
     )
 
+    paid_at = models.DateTimeField(null=True, blank=True)
+
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(
         max_length=20,
@@ -32,3 +34,9 @@ class Settlement(models.Model):
 
     def __str__(self):
         return f"Settlement {self.id} - {self.status}"
+
+def mark_as_paid(self, request, queryset):
+    updated = queryset.filter(status="PENDING").update(
+        status="PAID",
+        paid_at=timezone.now()
+    )
