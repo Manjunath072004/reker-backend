@@ -28,6 +28,8 @@ urlpatterns = [
     path("api/auth/", include("authentication.urls")),
     path("api/payments/", include("payments.urls")),
     path("api/transactions/", include("transactions.urls")),
+    path("api/settlements/", include("settlements.urls")),
+
 
 
     # other app routes...
