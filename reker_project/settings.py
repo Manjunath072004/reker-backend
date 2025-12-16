@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'coupons',
     'payments',
     'settlements',
+    'analytics', 
     'transactions',
     'corsheaders',
     'django.contrib.admin',
