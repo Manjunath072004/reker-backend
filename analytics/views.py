@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from payments.models import Payment
 from merchants.models import Merchant
+from settlements.models import Settlement
 
 
 class MerchantAnalyticsView(APIView):
@@ -59,4 +60,29 @@ class MerchantAnalyticsView(APIView):
                 "transactions": total_transactions,
             },
             "graph": daily_data
+        })
+
+
+class MerchantKpiView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        merchant = Merchant.objects.get(user=request.user)
+
+        total_success_payments = Payment.objects.filter(
+            merchant=merchant,
+            status="SUCCESS"
+        ).aggregate(total=Sum("final_amount"))["total"] or 0
+
+        total_paid_settlements = Settlement.objects.filter(
+            merchant=merchant,
+            status="PAID"
+        ).aggregate(total=Sum("amount"))["total"] or 0
+
+        pending_settlements = total_success_payments - total_paid_settlements
+
+        return Response({
+            "total_revenue": total_success_payments,
+            "paid_settlements": total_paid_settlements,
+            "pending_settlements": pending_settlements,
         })
