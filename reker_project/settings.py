@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'coupons',
     'payments',
     'settlements',
+    "notifications",
     'analytics', 
     'transactions',
     'corsheaders',
