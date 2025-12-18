@@ -122,3 +122,22 @@ class CouponVerifyView(APIView):
             "coupon": serializer.data
         }, status=200)
 
+class CouponByPhoneView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        phone = request.data.get("phone")
+
+        if not phone:
+            return Response({"error": "Phone number required"}, status=400)
+
+        # For now: return all ACTIVE coupons
+        coupons = Coupon.objects.filter(is_active=True)
+
+        valid_coupons = [c for c in coupons if c.is_valid()]
+
+        if not valid_coupons:
+            return Response({"message": "No active coupons"}, status=200)
+
+        serializer = CouponSerializer(valid_coupons, many=True)
+        return Response(serializer.data, status=200)
