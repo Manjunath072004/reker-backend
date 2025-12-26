@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
-from .models import Coupon
+from .models import Coupon, CouponPhone
 from .serializers import CouponSerializer
 
 
@@ -131,13 +131,47 @@ class CouponByPhoneView(APIView):
         if not phone:
             return Response({"error": "Phone number required"}, status=400)
 
-        # For now: return all ACTIVE coupons
-        coupons = Coupon.objects.filter(is_active=True)
+        coupon_ids = CouponPhone.objects.filter(
+            phone=phone,
+            is_active=True
+        ).values_list("coupon_id", flat=True)
+
+        coupons = Coupon.objects.filter(
+            id__in=coupon_ids,
+            is_active=True
+        )
 
         valid_coupons = [c for c in coupons if c.is_valid()]
 
-        if not valid_coupons:
-            return Response({"message": "No active coupons"}, status=200)
-
         serializer = CouponSerializer(valid_coupons, many=True)
         return Response(serializer.data, status=200)
+
+
+
+class AssignCouponToPhoneView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        phone = request.data.get("phone")
+        code = request.data.get("coupon_code")
+
+        if not phone or not code:
+            return Response(
+                {"error": "phone and coupon_code required"},
+                status=400
+            )
+
+        try:
+            coupon = Coupon.objects.get(code=code)
+        except Coupon.DoesNotExist:
+            return Response({"error": "Invalid coupon"}, status=404)
+
+        obj, created = CouponPhone.objects.get_or_create(
+            coupon=coupon,
+            phone=phone
+        )
+
+        return Response({
+            "message": "Coupon assigned",
+            "created": created
+        }, status=201)
