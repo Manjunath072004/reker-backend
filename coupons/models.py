@@ -40,18 +40,14 @@ class Coupon(models.Model):
         )
 
 class CouponPhone(models.Model):
-    coupon = models.ForeignKey(
-        Coupon,
-        on_delete=models.CASCADE,
-        related_name="phones"
-    )
-    phone = models.CharField(max_length=15)
-
+    coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name="phones")
+    phone = models.CharField(max_length=15, db_index=True)
     is_active = models.BooleanField(default=True)
     assigned_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ("coupon", "phone")
+
 
     def __str__(self):
         return f"{self.phone} - {self.coupon.code}"

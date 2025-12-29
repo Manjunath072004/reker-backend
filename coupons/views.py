@@ -2,11 +2,12 @@ from django.shortcuts import render
 
 # Create your views here.
 
+from decimal import Decimal
+from django.db import models
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import status
-
 from .models import Coupon, CouponPhone
 from .serializers import CouponSerializer
 
@@ -122,15 +123,27 @@ class CouponVerifyView(APIView):
             "coupon": serializer.data
         }, status=200)
 
+
 class CouponByPhoneView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         phone = request.data.get("phone")
+        order_amount_raw = request.data.get("order_amount", 0)
 
+        # ---------------- VALIDATIONS ----------------
         if not phone:
             return Response({"error": "Phone number required"}, status=400)
 
+        if not phone.isdigit() or len(phone) != 10:
+            return Response({"error": "Phone must be 10 digits"}, status=400)
+
+        try:
+            order_amount = Decimal(str(order_amount_raw))
+        except:
+            return Response({"error": "Invalid order amount"}, status=400)
+
+        # ---------------- FETCH COUPONS ----------------
         coupon_ids = CouponPhone.objects.filter(
             phone=phone,
             is_active=True
@@ -138,13 +151,48 @@ class CouponByPhoneView(APIView):
 
         coupons = Coupon.objects.filter(
             id__in=coupon_ids,
-            is_active=True
+            is_active=True,
+            start_date__lte=timezone.now(),
+            expiry_date__gte=timezone.now(),
+            used_count__lt=models.F("usage_limit")
         )
 
-        valid_coupons = [c for c in coupons if c.is_valid()]
+        if not coupons.exists():
+            return Response({"error": "No coupons for this phone"}, status=404)
 
-        serializer = CouponSerializer(valid_coupons, many=True)
-        return Response(serializer.data, status=200)
+        # ---------------- CALCULATE DISCOUNTS ----------------
+        enriched = []
+
+        for coupon in coupons:
+            if order_amount < coupon.min_order_amount:
+                continue
+
+            if coupon.discount_type == "flat":
+                discount = coupon.discount_value
+            else:
+                discount = (coupon.discount_value / Decimal("100")) * order_amount
+                if coupon.max_discount_amount:
+                    discount = min(discount, coupon.max_discount_amount)
+
+            enriched.append({
+                "coupon": coupon,
+                "discount": float(discount)
+            })
+
+        if not enriched:
+            return Response({"error": "No applicable coupons"}, status=404)
+
+        # ---------------- SORT (BEST FIRST) ----------------
+        enriched.sort(key=lambda x: x["discount"], reverse=True)
+
+        best_coupon = enriched[0]["coupon"]
+        other_coupons = [e["coupon"] for e in enriched[1:]]
+
+        return Response({
+            "best_coupon": CouponSerializer(best_coupon).data,
+            "other_coupons": CouponSerializer(other_coupons, many=True).data
+        })
+
 
 
 
