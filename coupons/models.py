@@ -51,3 +51,20 @@ class CouponPhone(models.Model):
 
     def __str__(self):
         return f"{self.phone} - {self.coupon.code}"
+
+
+class CouponUsage(models.Model):
+    coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE)
+    payment = models.OneToOneField(
+        "payments.Payment",
+        on_delete=models.CASCADE,
+        related_name="coupon_usage"
+    )
+    phone = models.CharField(max_length=15)
+    used_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("coupon", "phone")
+
+    def __str__(self):
+        return f"{self.coupon.code} used by {self.phone}"

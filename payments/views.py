@@ -10,7 +10,9 @@ from .serializers import CreatePaymentSerializer, PaymentSerializer
 from merchants.models import Merchant
 from django.shortcuts import get_object_or_404
 from settlements.models import Settlement
-
+from django.db import transaction
+from coupons.models import CouponUsage
+from django.db.models import F
 
 
 class CreatePaymentView(APIView):
@@ -27,12 +29,13 @@ class CreatePaymentView(APIView):
         }, status=201)
 
 
+
 class VerifyPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, payment_id):
         status_param = request.data.get("status")
-
         payment = get_object_or_404(Payment, id=payment_id)
 
         if status_param not in ["SUCCESS", "FAILED"]:
@@ -41,7 +44,31 @@ class VerifyPaymentView(APIView):
         payment.status = status_param
         payment.save()
 
+        # Only process coupon if payment SUCCESS
+        if status_param == "SUCCESS" and payment.coupon:
+
+            coupon = payment.coupon
+
+            # Safe dummy: ignore if no phone or user
+            phone_number = getattr(payment.user, "phone", "DUMMY") if payment.user else "DUMMY"
+
+            # Prevent duplicate usage
+            if not CouponUsage.objects.filter(coupon=coupon, payment=payment).exists():
+                CouponUsage.objects.create(
+                    coupon=coupon,
+                    payment=payment,
+                    phone=phone_number
+                )
+
+                # Increment used_count safely
+                coupon.used_count = F("used_count") + 1
+                coupon.save(update_fields=["used_count"])
+
+
+        # Settlement (dummy-safe)
         if status_param == "SUCCESS" and not payment.settlement_created:
+            from settlements.models import Settlement
+
             Settlement.objects.create(
                 merchant=payment.merchant,
                 amount=payment.final_amount,
@@ -50,19 +77,10 @@ class VerifyPaymentView(APIView):
             payment.settlement_created = True
             payment.save()
 
-    
-        #  Always update transaction also
-        if hasattr(payment, "transaction"):
-            transaction = payment.transaction
-
-            if not transaction.gateway_transaction_id:
-                transaction.gateway_transaction_id = "UPI"  # default method
-
-            transaction.status = status_param
-            transaction.save()
-
-        return Response({"message": "Payment updated", "status": payment.status})
-
+        return Response({
+            "message": "Payment updated",
+            "status": payment.status
+        })
 
 class MerchantPaymentsView(APIView):
     permission_classes = [IsAuthenticated]
