@@ -87,8 +87,10 @@ CACHES = {
 # Application definition
 
 INSTALLED_APPS = [
+    "channels",
     'authentication',
     'merchants',
+    'realtime',
     'coupons',
     'payments',
     'settlements',
@@ -154,15 +156,20 @@ DATABASES = {
 
 ASGI_APPLICATION = "reker_project.asgi.application"
 
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_redis.core.RedisChannelLayer",
+#         "CONFIG": {
+#             "hosts": [("localhost", 6379)],
+#         },
+#     },
+# }
+
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("localhost", 6379)],
-        },
-    },
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
 }
-
 
 
 # Password validation
