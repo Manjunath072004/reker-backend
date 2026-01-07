@@ -15,17 +15,18 @@
 
 # application = get_asgi_application()
 
-
-
 import os
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.core.asgi import get_asgi_application
-import realtime.routing
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "reker_project.settings")
 
+django_asgi_app = get_asgi_application()
+
+import realtime.routing  # AFTER settings set
+
 application = ProtocolTypeRouter({
-    "http": get_asgi_application(),
+    "http": django_asgi_app,
     "websocket": URLRouter(
         realtime.routing.websocket_urlpatterns
     ),
