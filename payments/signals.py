@@ -7,17 +7,13 @@ from merchants.models import Merchant
 
 @receiver(post_save, sender=Payment)
 def payment_status_realtime(sender, instance, created, **kwargs):
-    """
-    Send realtime update when payment status changes
-    """
-
     if created:
-        return  # ignore creation
+        return
 
-    if instance.status in ["SUCCESS", "FAILED"]:
-        merchant = instance.merchant
-        user_id = merchant.user.id
+    merchant = instance.merchant
+    user_id = merchant.user.id
 
+    if instance.status in ["SCANNED", "SUCCESS", "FAILED"]:
         notify_user(
             user_id=user_id,
             payload={
@@ -25,6 +21,5 @@ def payment_status_realtime(sender, instance, created, **kwargs):
                 "payment_id": str(instance.id),
                 "status": instance.status,
                 "final_amount": str(instance.final_amount),
-                "created_at": instance.created_at.isoformat(),
             }
         )

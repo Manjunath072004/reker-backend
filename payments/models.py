@@ -14,6 +14,7 @@ User = settings.AUTH_USER_MODEL
 class Payment(models.Model):
     STATUS_CHOICES = [
         ("PENDING", "Pending"),
+        ("SCANNED", "Scanned"),
         ("SUCCESS", "Success"),
         ("FAILED", "Failed"),
         ("REFUNDED", "Refunded"),

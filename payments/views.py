@@ -89,3 +89,21 @@ class MerchantPaymentsView(APIView):
         merchant = Merchant.objects.get(user=request.user)
         payments = Payment.objects.filter(merchant=merchant).order_by("-created_at")
         return Response(PaymentSerializer(payments, many=True).data)
+
+
+class ScanPaymentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, payment_id):
+        payment = get_object_or_404(Payment, id=payment_id)
+
+        if payment.status != "PENDING":
+            return Response({"error": "Invalid state"}, status=400)
+
+        payment.status = "SCANNED"
+        payment.save()
+
+        return Response({
+            "message": "QR scanned",
+            "status": payment.status
+        })
