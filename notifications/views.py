@@ -6,6 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import Notification
 from .serializers import NotificationSerializer
+from rest_framework import status
+
 
 
 class NotificationListView(APIView):
@@ -51,3 +53,26 @@ class MarkAllNotificationsReadView(APIView):
         ).update(is_read=True)
 
         return Response({"message": "All notifications marked as read"})
+    
+
+class BulkDeleteNotificationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ids = request.data.get("ids", [])
+
+        if not ids:
+            return Response(
+                {"message": "No notifications selected"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        deleted, _ = Notification.objects.filter(
+            user=request.user,
+            id__in=ids
+        ).delete()
+
+        return Response({
+            "message": f"{deleted} notifications deleted"
+        })
+
