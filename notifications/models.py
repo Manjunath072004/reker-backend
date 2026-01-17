@@ -22,6 +22,7 @@ class Notification(models.Model):
     type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
 
     is_read = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False) 
     created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):

@@ -4,7 +4,8 @@ from .views import (
     MarkNotificationReadView,
     UnreadNotificationCountView,
     MarkAllNotificationsReadView,
-    BulkDeleteNotificationsView
+    BulkDeleteNotificationsView,
+    ArchiveNotificationsView
 )
 
 urlpatterns = [
@@ -13,5 +14,6 @@ urlpatterns = [
     path("unread-count/", UnreadNotificationCountView.as_view()),
     path("read-all/", MarkAllNotificationsReadView.as_view()),
     path("delete-bulk/", BulkDeleteNotificationsView.as_view()),
+    path("archive/", ArchiveNotificationsView.as_view()), 
 
 ]

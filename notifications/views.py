@@ -15,7 +15,8 @@ class NotificationListView(APIView):
 
     def get(self, request):
         notifications = Notification.objects.filter(
-            user=request.user
+            user=request.user,
+            is_archived=False
         ).order_by("-created_at")
         return Response(NotificationSerializer(notifications, many=True).data)
 
@@ -75,4 +76,17 @@ class BulkDeleteNotificationsView(APIView):
         return Response({
             "message": f"{deleted} notifications deleted"
         })
+    
 
+class ArchiveNotificationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ids = request.data.get("ids", [])
+
+        Notification.objects.filter(
+            user=request.user,
+            id__in=ids
+        ).update(is_archived=True)
+
+        return Response({"message": "Notifications archived"})
