@@ -90,3 +90,29 @@ class ArchiveNotificationsView(APIView):
         ).update(is_archived=True)
 
         return Response({"message": "Notifications archived"})
+    
+class ArchivedNotificationListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        notifications = Notification.objects.filter(
+            user=request.user,
+            is_archived=True
+        ).order_by("-created_at")
+
+        return Response(NotificationSerializer(notifications, many=True).data)
+
+
+class RestoreNotificationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ids = request.data.get("ids", [])
+
+        Notification.objects.filter(
+            user=request.user,
+            id__in=ids,
+            is_archived=True
+        ).update(is_archived=False)
+
+        return Response({"message": "Notifications restored"})
