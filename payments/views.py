@@ -13,6 +13,9 @@ from settlements.models import Settlement
 from django.db import transaction
 from coupons.models import CouponUsage
 from django.db.models import F
+from analytics.realtime import notify_kpi_update
+from realtime.utils import notify_payment   
+
 
 
 class CreatePaymentView(APIView):
@@ -43,6 +46,12 @@ class VerifyPaymentView(APIView):
 
         payment.status = status_param
         payment.save()
+
+        #  REALTIME EVENTS
+        notify_payment(payment, payment.status)
+        
+        if status_param == "SUCCESS":
+            notify_kpi_update(payment.merchant_id)
 
         # Only process coupon if payment SUCCESS
         if status_param == "SUCCESS" and payment.coupon:
@@ -102,6 +111,8 @@ class ScanPaymentView(APIView):
 
         payment.status = "SCANNED"
         payment.save()
+
+        notify_payment(payment, "SCANNED")
 
         return Response({
             "message": "QR scanned",
