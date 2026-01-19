@@ -9,6 +9,7 @@ from payments.models import Payment
 from merchants.models import Merchant
 from .models import Transaction, TransactionLog
 from .serializers import TransactionSerializer
+from realtime.utils import notify_payment
 
 
 class CreateTransactionView(APIView):
@@ -36,6 +37,9 @@ class CreateTransactionView(APIView):
             message="Transaction initiated"
         )
 
+        #  REALTIME EVENT
+        notify_payment(payment, "TRANSACTION_CREATED")
+
         return Response(TransactionSerializer(transaction).data)
 
 
@@ -56,6 +60,9 @@ class UpdateTransactionView(APIView):
             transaction=txn,
             message=f"Transaction updated to {status}"
         )
+
+        #  REALTIME EVENT
+        notify_payment(txn.payment, "TRANSACTION_UPDATED")
 
         return Response({"detail": "Transaction updated", "status": txn.status})
 
