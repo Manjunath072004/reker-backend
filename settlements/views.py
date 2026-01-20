@@ -6,10 +6,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.shortcuts import get_object_or_404
+from realtime.utils import notify_settlement
 
 from .models import Settlement
 from .serializers import SettlementSerializer
 from merchants.models import Merchant
+from django.utils import timezone
 
 
 class MerchantSettlementsView(APIView):
@@ -60,7 +62,11 @@ class MarkSettlementPaidView(APIView):
         settlement = get_object_or_404(Settlement, id=settlement_id)
 
         settlement.status = "PAID"
+        settlement.paid_at = timezone.now()
         settlement.save()
+
+         # REALTIME EVENT
+        notify_settlement(settlement)
 
         return Response({
             "message": "Settlement marked as PAID",

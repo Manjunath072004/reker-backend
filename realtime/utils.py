@@ -27,3 +27,20 @@ def notify_payment(payment, status):
             }
         }
     )
+
+
+def notify_settlement(settlement):
+    channel_layer = get_channel_layer()
+
+    async_to_sync(channel_layer.group_send)(
+        f"merchant_{settlement.merchant_id}",
+        {
+            "type": "send_event",
+            "data": {
+                "type": "SETTLEMENT_UPDATE",
+                "settlement_id": str(settlement.id),
+                "status": settlement.status,
+                "amount": str(settlement.amount),
+            }
+        }
+    )
