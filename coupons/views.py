@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Coupon, CouponPhone
 from .serializers import CouponSerializer
+from realtime.utils import notify_coupon
 
 
 class CouponCreateView(APIView):
@@ -19,6 +20,7 @@ class CouponCreateView(APIView):
         serializer = CouponSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(created_by=request.user)
+            notify_coupon(serializer.instance, "CREATED")
             return Response({"message": "Coupon created", "coupon": serializer.data}, status=201)
         return Response(serializer.errors, status=400)
 
@@ -91,6 +93,9 @@ class CouponApplyView(APIView):
         # Increment usage count
         coupon.used_count += 1
         coupon.save()
+
+        notify_coupon(coupon, "USED")
+
 
         return Response({
             "message": "Coupon applied",
@@ -218,6 +223,9 @@ class AssignCouponToPhoneView(APIView):
             coupon=coupon,
             phone=phone
         )
+
+        notify_coupon(coupon, "ASSIGNED")
+
 
         return Response({
             "message": "Coupon assigned",

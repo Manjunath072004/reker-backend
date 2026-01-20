@@ -44,3 +44,30 @@ def notify_settlement(settlement):
             }
         }
     )
+
+
+def notify_coupon(coupon, action):
+    """
+    action = CREATED | UPDATED | USED | ASSIGNED
+    """
+    channel_layer = get_channel_layer()
+
+    payload = {
+        "type": "COUPON_UPDATE",
+        "action": action,
+        "coupon_id": str(coupon.id),
+        "code": coupon.code,
+        "is_active": coupon.is_active,
+        "used_count": coupon.used_count,
+        "usage_limit": coupon.usage_limit,
+    }
+
+    # notify coupon creator
+    if coupon.created_by:
+        async_to_sync(channel_layer.group_send)(
+            f"user_{coupon.created_by.id}",
+            {
+                "type": "send_event",
+                "data": payload,
+            }
+        )
