@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CouponCreateView, CouponListView, CouponApplyView, CouponVerifyView, CouponByPhoneView, AssignCouponToPhoneView
+from .views import CouponCreateView, CouponListView, CouponApplyView, CouponVerifyView, CouponByPhoneView, AssignCouponToPhoneView, CouponQRView, CouponScanView
 
 urlpatterns = [
     path("create/", CouponCreateView.as_view()),
@@ -7,7 +7,9 @@ urlpatterns = [
     path("verify/", CouponVerifyView.as_view()),
     path("apply/", CouponApplyView.as_view()),
     path("by-phone/", CouponByPhoneView.as_view()),
-    # coupons/urls.py
     path("assign/", AssignCouponToPhoneView.as_view()),
+    path("qr/<int:coupon_id>/", CouponQRView.as_view(), name="coupon-qr"),
+    path("scan/", CouponScanView.as_view(), name="coupon-scan"),
+
 
 ]
