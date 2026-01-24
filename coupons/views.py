@@ -11,6 +11,9 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Coupon, CouponPhone
 from .serializers import CouponSerializer
 from realtime.utils import notify_coupon
+from django.conf import settings
+import jwt
+from datetime import datetime, timedelta
 
 
 class CouponCreateView(APIView):
@@ -231,3 +234,73 @@ class AssignCouponToPhoneView(APIView):
             "message": "Coupon assigned",
             "created": created
         }, status=201)
+
+
+class CouponQRView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, coupon_id):
+        try:
+            coupon = Coupon.objects.get(
+                id=coupon_id,
+                created_by=request.user,
+                is_active=True
+            )
+        except Coupon.DoesNotExist:
+            return Response({"error": "Invalid coupon"}, status=404)
+
+        if not coupon.is_valid():
+            return Response({"error": "Coupon expired"}, status=400)
+
+        payload = {
+            "coupon_id": str(coupon.id),
+            "user_id": str(request.user.id),
+            "type": "COUPON_QR",
+            "exp": datetime.utcnow() + timedelta(minutes=5)
+        }
+
+
+
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm="HS256")
+
+        return Response({
+            "qr_token": token
+        })
+
+
+
+class CouponScanView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = request.data.get("token")
+        order_amount_raw = request.data.get("order_amount", 0)
+
+        if not token:
+            return Response({"error": "QR token missing"}, status=400)
+
+        try:
+            payload = jwt.decode(
+                token,
+                settings.SECRET_KEY,
+                algorithms=["HS256"]
+            )
+        except jwt.InvalidTokenError:
+            return Response({"error": "Invalid QR"}, status=400)
+
+        if str(payload.get("user_id")) != str(request.user.id):
+            return Response({"error": "QR not for this user"}, status=403)
+
+        try:
+            coupon = Coupon.objects.get(id=payload["coupon_id"])
+        except Coupon.DoesNotExist:
+            return Response({"error": "Coupon not found"}, status=404)
+
+        if not coupon.is_valid():
+            return Response({"error": "Coupon expired or invalid"}, status=400)
+
+        return Response({
+            "message": "Coupon verified via QR",
+            "coupon": CouponSerializer(coupon).data
+        }, status=200)
+
