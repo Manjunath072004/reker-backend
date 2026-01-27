@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Coupon, CouponPhone
+from .models import Coupon, CouponPhone, CouponUsage
 from .serializers import CouponSerializer
 from realtime.utils import notify_coupon
 from django.conf import settings
@@ -274,10 +274,9 @@ class CouponScanView(APIView):
 
     def post(self, request):
         token = request.data.get("token")
-        order_amount_raw = request.data.get("order_amount", 0)
 
         if not token:
-            return Response({"error": "QR token missing"}, status=400)
+            return Response({"error": "Token missing"}, status=400)
 
         try:
             payload = jwt.decode(
@@ -286,21 +285,70 @@ class CouponScanView(APIView):
                 algorithms=["HS256"]
             )
         except jwt.InvalidTokenError:
-            return Response({"error": "Invalid QR"}, status=400)
+            return Response({"error": "Invalid / Expired QR"}, status=400)
 
-        if str(payload.get("user_id")) != str(request.user.id):
-            return Response({"error": "QR not for this user"}, status=403)
+        coupon_id = payload.get("coupon_id")
+        phone = payload.get("phone")
+
+        if not coupon_id or not phone:
+            return Response({"error": "Invalid QR data"}, status=400)
 
         try:
-            coupon = Coupon.objects.get(id=payload["coupon_id"])
+            coupon = Coupon.objects.get(id=coupon_id)
         except Coupon.DoesNotExist:
             return Response({"error": "Coupon not found"}, status=404)
 
+        #  Check phone mapping
+        if not CouponPhone.objects.filter(
+            coupon=coupon,
+            phone=phone,
+            is_active=True
+        ).exists():
+            return Response({"error": "Coupon not valid for this customer"}, status=403)
+
+        #  Prevent reuse
+        if CouponUsage.objects.filter(coupon=coupon, phone=phone).exists():
+            return Response({"error": "Coupon already used"}, status=400)
+
         if not coupon.is_valid():
-            return Response({"error": "Coupon expired or invalid"}, status=400)
+            return Response({"error": "Coupon expired"}, status=400)
 
         return Response({
-            "message": "Coupon verified via QR",
-            "coupon": CouponSerializer(coupon).data
+            "coupon": CouponSerializer(coupon).data,
+            "phone": phone
         }, status=200)
 
+
+class CustomerCouponBarcodesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        phone = request.data.get("phone")
+
+        if not phone or not phone.isdigit() or len(phone) != 10:
+            return Response({"error": "Invalid phone"}, status=400)
+
+        coupon_phones = CouponPhone.objects.filter(
+            phone=phone,
+            is_active=True,
+            coupon__is_active=True,
+            coupon__start_date__lte=timezone.now(),
+            coupon__expiry_date__gte=timezone.now(),
+            coupon__used_count__lt=models.F("coupon__usage_limit")
+        ).select_related("coupon")
+
+        barcodes = []
+
+        for cp in coupon_phones:
+            barcodes.append({
+                "coupon": CouponSerializer(cp.coupon).data,
+                "barcode_value": cp.coupon.code  #  THIS IS THE KEY FIX
+            })
+
+
+            # barcodes.append({
+            #     "coupon": CouponSerializer(cp.coupon).data,
+            #     "barcode_token": token
+            # })
+
+        return Response(barcodes, status=200)
