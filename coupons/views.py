@@ -319,36 +319,74 @@ class CouponScanView(APIView):
         }, status=200)
 
 
-class CustomerCouponBarcodesView(APIView):
+class CustomerBestCouponBarcodeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         phone = request.data.get("phone")
+        order_amount_raw = request.data.get("order_amount", 0)
 
         if not phone or not phone.isdigit() or len(phone) != 10:
             return Response({"error": "Invalid phone"}, status=400)
 
-        coupon_phones = CouponPhone.objects.filter(
+        try:
+            order_amount = Decimal(str(order_amount_raw))
+        except:
+            return Response({"error": "Invalid order amount"}, status=400)
+
+        # Fetch coupons mapped to phone
+        coupon_ids = CouponPhone.objects.filter(
             phone=phone,
+            is_active=True
+        ).values_list("coupon_id", flat=True)
+
+        coupons = Coupon.objects.filter(
+            id__in=coupon_ids,
             is_active=True,
-            coupon__is_active=True,
-            coupon__start_date__lte=timezone.now(),
-            coupon__expiry_date__gte=timezone.now(),
-            coupon__used_count__lt=models.F("coupon__usage_limit")
-        ).select_related("coupon")
+            start_date__lte=timezone.now(),
+            expiry_date__gte=timezone.now(),
+            used_count__lt=models.F("usage_limit")
+        )
 
-        barcodes = []
+        enriched = []
 
-        for cp in coupon_phones:
-            barcodes.append({
-                "coupon": CouponSerializer(cp.coupon).data,
-                "barcode_value": cp.coupon.code  #  THIS IS THE KEY FIX
+        for coupon in coupons:
+            if order_amount < coupon.min_order_amount:
+                continue
+
+            if coupon.discount_type == "flat":
+                discount = coupon.discount_value
+            else:
+                discount = (coupon.discount_value / Decimal("100")) * order_amount
+                if coupon.max_discount_amount:
+                    discount = min(discount, coupon.max_discount_amount)
+
+            enriched.append({
+                "coupon": coupon,
+                "discount": discount
             })
 
+        if not enriched:
+            return Response({"error": "No applicable coupon"}, status=404)
 
-            # barcodes.append({
-            #     "coupon": CouponSerializer(cp.coupon).data,
-            #     "barcode_token": token
-            # })
+        # Sort best first
+        enriched.sort(key=lambda x: x["discount"], reverse=True)
 
-        return Response(barcodes, status=200)
+        best = enriched[0]
+        others = enriched[1:]
+
+        return Response({
+            "best_barcode": {
+                "coupon": CouponSerializer(best["coupon"]).data,
+                "barcode_value": best["coupon"].code,  # or token if you want
+                "discount": float(best["discount"])
+            },
+            "other_barcodes": [
+                {
+                    "coupon": CouponSerializer(e["coupon"]).data,
+                    "barcode_value": e["coupon"].code,
+                    "discount": float(e["discount"])
+                }
+                for e in others
+            ]
+        }, status=200)
