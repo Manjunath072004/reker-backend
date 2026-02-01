@@ -15,6 +15,9 @@ from django.conf import settings
 import jwt
 from datetime import datetime, timedelta
 
+def is_expiring_soon(coupon):
+    return coupon.expiry_date <= timezone.now() + timedelta(hours=24)
+
 
 class CouponCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -334,7 +337,7 @@ class CustomerBestCouponBarcodeView(APIView):
         except:
             return Response({"error": "Invalid order amount"}, status=400)
 
-        # Fetch coupons mapped to phone
+        #  Fetch coupons mapped to phone
         coupon_ids = CouponPhone.objects.filter(
             phone=phone,
             is_active=True
@@ -350,6 +353,7 @@ class CustomerBestCouponBarcodeView(APIView):
 
         enriched = []
 
+        #  Calculate discounts
         for coupon in coupons:
             if order_amount < coupon.min_order_amount:
                 continue
@@ -369,24 +373,40 @@ class CustomerBestCouponBarcodeView(APIView):
         if not enriched:
             return Response({"error": "No applicable coupon"}, status=404)
 
-        # Sort best first
-        enriched.sort(key=lambda x: x["discount"], reverse=True)
+        #  Separate expiring vs non-expiring 
+        non_expiring = [
+            e for e in enriched if not is_expiring_soon(e["coupon"])
+        ]
+        expiring = [
+            e for e in enriched if is_expiring_soon(e["coupon"])
+        ]
 
-        best = enriched[0]
-        others = enriched[1:]
+        # Auto-apply ONLY non-expiring coupons
+        if non_expiring:
+            non_expiring.sort(key=lambda x: x["discount"], reverse=True)
+            best = non_expiring[0]
+            others = non_expiring[1:] + expiring
+        else:
+            #  All coupons expiring → do NOT auto-apply
+            best = None
+            others = expiring
 
+        # Response 
         return Response({
-            "best_barcode": {
+            "best_barcode": best and {
                 "coupon": CouponSerializer(best["coupon"]).data,
-                "barcode_value": best["coupon"].code,  # or token if you want
-                "discount": float(best["discount"])
+                "barcode_value": best["coupon"].code,
+                "discount": float(best["discount"]),
+                "auto_applied": True
             },
             "other_barcodes": [
                 {
                     "coupon": CouponSerializer(e["coupon"]).data,
                     "barcode_value": e["coupon"].code,
-                    "discount": float(e["discount"])
+                    "discount": float(e["discount"]),
+                    "expiring": is_expiring_soon(e["coupon"])
                 }
                 for e in others
             ]
         }, status=200)
+
