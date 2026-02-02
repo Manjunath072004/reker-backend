@@ -321,7 +321,6 @@ class CouponScanView(APIView):
             "phone": phone
         }, status=200)
 
-
 class CustomerBestCouponBarcodeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -329,6 +328,7 @@ class CustomerBestCouponBarcodeView(APIView):
         phone = request.data.get("phone")
         order_amount_raw = request.data.get("order_amount", 0)
 
+        # ---------------- VALIDATION ----------------
         if not phone or not phone.isdigit() or len(phone) != 10:
             return Response({"error": "Invalid phone"}, status=400)
 
@@ -337,7 +337,7 @@ class CustomerBestCouponBarcodeView(APIView):
         except:
             return Response({"error": "Invalid order amount"}, status=400)
 
-        #  Fetch coupons mapped to phone
+        # ---------------- FETCH COUPONS ----------------
         coupon_ids = CouponPhone.objects.filter(
             phone=phone,
             is_active=True
@@ -353,7 +353,7 @@ class CustomerBestCouponBarcodeView(APIView):
 
         enriched = []
 
-        #  Calculate discounts
+        # ---------------- CALCULATE DISCOUNTS ----------------
         for coupon in coupons:
             if order_amount < coupon.min_order_amount:
                 continue
@@ -373,32 +373,51 @@ class CustomerBestCouponBarcodeView(APIView):
         if not enriched:
             return Response({"error": "No applicable coupon"}, status=404)
 
-        #  Separate expiring vs non-expiring 
-        non_expiring = [
-            e for e in enriched if not is_expiring_soon(e["coupon"])
-        ]
-        expiring = [
-            e for e in enriched if is_expiring_soon(e["coupon"])
-        ]
+        # ---------------- SPLIT EXPIRING / NON-EXPIRING ----------------
+        non_expiring = [e for e in enriched if not is_expiring_soon(e["coupon"])]
+        expiring = [e for e in enriched if is_expiring_soon(e["coupon"])]
 
-        # Auto-apply ONLY non-expiring coupons
+        # ---------------- AUTO APPLY BEST (NON-EXPIRING) ----------------
+        best = None
+        others = []
+
         if non_expiring:
             non_expiring.sort(key=lambda x: x["discount"], reverse=True)
             best = non_expiring[0]
             others = non_expiring[1:] + expiring
         else:
-            #  All coupons expiring → do NOT auto-apply
-            best = None
+            # All coupons expiring → do NOT auto-apply
             others = expiring
 
-        # Response 
+        # ---------------- PICK BEST EXPIRING COUPON (OVERRIDE) ----------------
+        expiring_best = None
+        if expiring:
+            expiring.sort(key=lambda x: x["discount"], reverse=True)
+            expiring_best = expiring[0]
+
+        # ---------------- FLAG FOR UI PROMPT ----------------
+        has_expiring_override = best is not None and expiring_best is not None
+
+        # ---------------- RESPONSE ----------------
         return Response({
+            #  Auto-applied best coupon
             "best_barcode": best and {
                 "coupon": CouponSerializer(best["coupon"]).data,
                 "barcode_value": best["coupon"].code,
                 "discount": float(best["discount"]),
                 "auto_applied": True
             },
+
+            #  One-click replacement candidate
+            "expiring_barcode": expiring_best and {
+                "coupon": CouponSerializer(expiring_best["coupon"]).data,
+                "barcode_value": expiring_best["coupon"].code,
+                "discount": float(expiring_best["discount"]),
+                "auto_applied": False,
+                "expiring": True
+            },
+
+            #  Remaining coupons (excluding promoted expiring one)
             "other_barcodes": [
                 {
                     "coupon": CouponSerializer(e["coupon"]).data,
@@ -407,6 +426,9 @@ class CustomerBestCouponBarcodeView(APIView):
                     "expiring": is_expiring_soon(e["coupon"])
                 }
                 for e in others
-            ]
-        }, status=200)
+                if not expiring_best or e["coupon"].id != expiring_best["coupon"].id
+            ],
 
+            # UI helper flag
+            "has_expiring_override": has_expiring_override
+        }, status=200)
