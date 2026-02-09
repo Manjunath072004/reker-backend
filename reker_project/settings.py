@@ -89,6 +89,7 @@ CACHES = {
 INSTALLED_APPS = [
     "channels",
     'authentication',
+    'adminpanel',
     'merchants',
     'realtime',
     'coupons',
