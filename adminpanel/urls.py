@@ -1,5 +1,12 @@
 # adminpanel/urls.py
 from django.urls import path
+
+from adminpanel.views.coupons import (
+    AdminCouponListView,
+    AdminCouponCreateView,
+    AdminCouponToggleView,
+    AdminAssignCouponToPhoneView
+)
 from adminpanel.views.merchants import (
     AdminMerchantToggleView,
     AdminMerchantSettingsUpdateView,
@@ -14,9 +21,11 @@ from adminpanel.views.users import (
     AdminUserOTPView
 )
 
-
-
 urlpatterns = [
+    path("coupons/", AdminCouponListView.as_view()),
+    path("coupons/create/", AdminCouponCreateView.as_view()),
+    path("coupons/assign/", AdminAssignCouponToPhoneView.as_view()),
+    path("coupons/<int:coupon_id>/toggle/", AdminCouponToggleView.as_view()),
     path("merchants/<int:merchant_id>/toggle/", AdminMerchantToggleView.as_view()),
     path("merchants/<int:merchant_id>/settings/", AdminMerchantSettingsUpdateView.as_view()),
     path("merchants/<int:merchant_id>/banks/<int:bank_id>/primary/", AdminSetPrimaryBankView.as_view()),
